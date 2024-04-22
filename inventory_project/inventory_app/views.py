@@ -16,6 +16,7 @@ import json
 from django.core.serializers.json import DjangoJSONEncoder
 from statistics import median
 from django.core.exceptions import ObjectDoesNotExist
+import socket
 
 
 
@@ -518,14 +519,53 @@ def analyze(request):
     return render(request, 'inventory_app/analyze.html', context)
 
 
+# def item_search(request):
+#     item_name = request.GET.get('name', '')
+#     if not item_name:
+#         return JsonResponse({'error': 'No item name provided'}, status=400)
+
+#     items = InventoryItem.objects.filter(item__icontains=item_name)
+#     if not items:
+#         return JsonResponse({'error': 'No items found'}, status=404)
+    
+#     data = [{'item_name': item.item, 'location': item.location.name, 'units': item.unit} for item in items]
+#     return JsonResponse({'items': data}, safe=False)
+
 def item_search(request):
     item_name = request.GET.get('name', '')
     if not item_name:
         return JsonResponse({'error': 'No item name provided'}, status=400)
 
     items = InventoryItem.objects.filter(item__icontains=item_name)
-    if not items:
+    if not items.exists():
         return JsonResponse({'error': 'No items found'}, status=404)
-    
-    data = [{'item_name': item.item, 'location': item.location.name, 'units': item.unit} for item in items]
-    return JsonResponse({'items': data}, safe=False)
+
+    data = [{
+        'item_name': item.item,
+        'location': item.location.name,
+        'units': item.unit
+    } for item in items]
+
+    count = items.count()
+    client_ip = get_client_ip(request)
+    server_ip = get_server_ip()
+
+    return JsonResponse({
+        'items': data,
+        'count': count,
+        'client_ip': client_ip,
+        'server_ip': server_ip
+    }, safe=False)
+
+def get_client_ip(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
+
+def get_server_ip():
+    hostname = socket.gethostname()
+    server_ip = socket.gethostbyname(hostname)
+    return server_ip
